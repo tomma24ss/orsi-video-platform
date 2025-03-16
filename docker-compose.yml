@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: orsi-frontend:latest
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: orsi-api:latest

@@ -4,17 +4,18 @@ A minimal video platform built with:
 
 - **Frontend**: React (TypeScript)  
 - **Backend**: Python Flask API  
-- **AI Processing**: (Optional, for future phases)  
+- **AI Processing**: YOLO-based object detection  
 - **Infrastructure**: Docker, Kubernetes (k3s)
 
 ---
 
 ## 🚀 Features
 
-- 📤 Upload videos
-- 🎥 Watch uploaded videos
-- 🗑️ Delete videos
-- 🧠 Display AI-generated metadata (to be integrated)
+- 📤 Upload videos  
+- 🎥 Watch uploaded and processed videos  
+- ⚙️ Real-time progress bar for AI processing  
+- 🧠 View AI-generated metadata for processed videos  
+- 🗑️ Delete videos and metadata  
 - 💾 Persistent storage using Kubernetes PV & PVC
 
 ---
@@ -23,12 +24,14 @@ A minimal video platform built with:
 
 ```
 orsi-video-platform/
-├── api/                # Flask API for video operations
+├── api/                # Flask API for video operations and AI job management
+├── ai-job/             # Python app for video processing with YOLO
 ├── frontend/           # React frontend (TypeScript)
 ├── k8s/                # Kubernetes deployment and service files
 │   ├── api/            # API Kubernetes manifests
-│   └── frontend/       # Frontend Kubernetes manifests
-├── start.sh          # Script to start Docker and Kubernetes deployments
+│   ├── frontend/       # Frontend Kubernetes manifests
+│   └── ai-job/        # AI job Kubernetes manifest
+├── start.sh            # Script to start Docker and Kubernetes deployments
 ├── stop.sh             # Script to clean and stop Docker and Kubernetes deployments
 └── README.md           # Project documentation
 ```
@@ -46,16 +49,16 @@ cd orsi-video-platform
 
 ### 2. **Ensure Dependencies are Installed**
 
-- **Docker**
-- **k3s** (Lightweight Kubernetes)
-- **kubectl** (for interacting with Kubernetes)
-- **Python (3.12+)** for the Flask API
+- **Docker**  
+- **k3s** (Lightweight Kubernetes)  
+- **kubectl** (for interacting with Kubernetes)  
+- **Python (3.12+)** for the Flask API  
 
 ---
 
 ## 🚀 Deployment Instructions
 
-### 1. **Start the platform deployment**
+### 1. **Start the Platform Deployment**
 
 ```bash
 ./start.sh
@@ -63,10 +66,10 @@ cd orsi-video-platform
 
 This script will:
 
-- Start Docker and k3s.
-- Build Docker images for both the API and frontend.
-- Import the Docker images into k3s.
-- Apply Kubernetes manifests for PV, PVC, deployments, and services.
+- Start Docker and k3s.  
+- Build Docker images for the API, frontend, and AI job.  
+- Import the Docker images into k3s.  
+- Apply Kubernetes manifests for PV, PVC, deployments, and services.  
 - Display the status of all Kubernetes resources.
 
 ---
@@ -78,7 +81,7 @@ This script will:
 
 ---
 
-### 3. **Stop and remove the platform deployment**
+### 3. **Stop and Remove the Platform Deployment**
 
 ```bash
 ./stop.sh
@@ -86,9 +89,9 @@ This script will:
 
 This script will:
 
-- Stop all Kubernetes deployments and services.
-- Remove persistent volumes and claims.
-- Clean up Docker containers, volumes, and images.
+- Stop all Kubernetes deployments and services.  
+- Remove persistent volumes and claims.  
+- Clean up Docker containers, volumes, and images.  
 - Stop Docker and k3s services.
 
 ---
@@ -122,18 +125,32 @@ python app.py
 
 ---
 
+### AI Job (Video Processing)
+
+```bash
+cd ai-job
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+- Runs the AI job service for testing.
+
+---
+
 ### ✅ Environment Variables (Optional)
 
-In development mode, you can create a `.env` file in the `api` directory to specify custom configurations.
-
-**Example `.env` file:**
+In development mode, create a `.env` file in the `api` directory:
 
 ```env
-export UPLOAD_FOLDER="/data/videos"
+export UPLOAD_FOLDER="/data/videos/uploaded"
+export PROCESSED_FOLDER="/data/videos/processed"
+export METADATA_FOLDER="/data/videos/metadata"
 export CORS_ORIGINS="http://localhost:3000,http://172.19.245.152:30001"
 ```
 
-> **Note**: In Kubernetes, the `UPLOAD_FOLDER` is automatically set via volume mounts, so you don't need to set it manually.
+> **Note**: In Kubernetes, these folders are set via volume mounts.
 
 ---
 
@@ -141,17 +158,15 @@ export CORS_ORIGINS="http://localhost:3000,http://172.19.245.152:30001"
 
 ### Persistent Volume (PV) and Persistent Volume Claim (PVC)
 
-- **Host Path**: Video data is persisted at `/data/k8s/videos` on the host system.  
-- **Container Path**: Inside the API container, it's accessible as `/data/videos`.
-  
-- **Why `/data/videos`?**  
-  - Kubernetes automatically mounts the host directory into the container, ensuring persistence.  
-  - The API only needs to save files to `/data/videos` (which maps to the persistent storage).
+- **Host Paths**:
+  - Uploaded Videos: `/data/k8s/videos/uploaded`
+  - Processed Videos: `/data/k8s/videos/processed`
+  - Metadata: `/data/k8s/videos/metadata`
 
-### Volume Example
-
-- **Host Path**: `/data/k8s/videos`  
-- **Container Path**: `/data/videos`
+- **Container Paths**:
+  - Uploaded: `/data/videos/uploaded`
+  - Processed: `/data/videos/processed`
+  - Metadata: `/data/videos/metadata`
 
 ---
 
@@ -168,23 +183,26 @@ export CORS_ORIGINS="http://localhost:3000,http://172.19.245.152:30001"
 ## 📝 Usage Instructions
 
 1. **Uploading Videos**
+   - Use the frontend to upload `.mp4` files.
+   - Progress is shown in real-time while the AI job processes the video.
 
-- Use the frontend to upload `.mp4` files.
-- The API will automatically rename files if duplicates exist (e.g., `video.mp4` -> `video_2.mp4`).
+2. **Tracking AI Job Status**
+   - A progress bar is displayed in the frontend for each uploaded video until processing is complete.
 
-2. **Viewing Videos**
+3. **Viewing Processed Videos**
+   - Processed videos will appear automatically in the "Processed Videos" section.
 
-- Uploaded videos will be listed and can be played directly in the frontend.
+4. **Viewing Metadata**
+   - For each processed video, click on the **"View Metadata"** button to display AI-generated data.
 
-3. **Deleting Videos**
-
-- Use the frontend to delete any video.
+5. **Deleting Videos or Metadata**
+   - Use the frontend to delete any uploaded, processed video, or its metadata.
 
 ---
 
 ## 🧹 Cleanup Instructions
 
-If any resources need to be cleaned manually:
+If resources need to be cleaned manually:
 
 ```bash
 kubectl delete all --all --ignore-not-found
@@ -197,27 +215,28 @@ sudo docker system prune -f
 
 ## ⚡ Known Issues
 
-- CORS issues may occur if accessing from a different origin. Ensure CORS settings in the API are updated accordingly.
-- For local development, ensure Docker and k3s are properly started.
+- **CORS**: Ensure CORS settings in the API are configured correctly for external access.
+- **WSL2 IP**: If using WSL2, the IP may change after restarting, so update accordingly.
+- **AI Job Delay**: The AI job may take up to 1 minute for larger videos.
 
 ---
 
 ## 👨‍💻 Contributing
 
-1. Fork this repository.
-2. Create a new branch for your feature.
-3. Commit your changes with clear messages.
+1. Fork this repository.  
+2. Create a new branch for your feature.  
+3. Commit your changes with clear messages.  
 4. Submit a pull request for review.
 
 ---
-
 
 ## 🤝 Acknowledgements
 
 - [Docker](https://www.docker.com/)  
 - [K3s](https://k3s.io/)  
 - [React](https://reactjs.org/)  
-- [Flask](https://flask.palletsprojects.com/)
+- [Flask](https://flask.palletsprojects.com/)  
+- [Ultralytics YOLO](https://docs.ultralytics.com/)
 
 ---
 

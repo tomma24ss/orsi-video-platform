@@ -92,6 +92,28 @@ def trigger_ai_job(unique_filename):
         logger.error(f"Failed to trigger AI job: {e}")
         raise APIException(str(e), 500)
 
+# API to check AI job status
+@video_blueprint.route('/job-status/<filename>', methods=['GET'])
+def check_job_status(filename):
+    try:
+        jobs = k8s_batch.list_namespaced_job(namespace="default")
+        job = next((j for j in jobs.items if filename in j.metadata.name), None)
+
+        if not job:
+            return jsonify({"status": "not_found"})
+
+        if job.status.succeeded == 1:
+            return jsonify({"status": "completed"})
+        elif job.status.active == 1:
+            return jsonify({"status": "processing"})
+        elif job.status.failed:
+            return jsonify({"status": "failed"})
+        else:
+            return jsonify({"status": "unknown"})
+    except Exception as e:
+        logger.error(f"Error fetching job status: {e}")
+        raise APIException(str(e))
+
 # Upload Raw Video
 @video_blueprint.route('/upload', methods=['POST'])
 def upload_video():
@@ -120,7 +142,7 @@ def list_videos():
         logger.error(f"Error listing videos: {e}")
         raise APIException(str(e))
 
-# Serve Uploaded, Processed Video or Metadata
+# Serve Uploaded, Processed Video, or Metadata
 @video_blueprint.route('/<folder>/<filename>', methods=['GET'])
 def get_video(folder, filename):
     try:

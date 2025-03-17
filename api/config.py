@@ -11,7 +11,7 @@ class Config:
 
 class DevelopmentConfig(Config):
     """Development-specific configuration."""
-    DEBUG = True
+    DEBUG = False
 
 
 class ProductionConfig(Config):

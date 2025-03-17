@@ -40,7 +40,7 @@ orsi-video-platform/
 ### 1. **Clone the Repository**
 
 ```bash
-git clone https://github.com/<your-username>/orsi-video-platform.git
+git clone https://github.com/tomma24ss/orsi-video-platform.git
 cd orsi-video-platform
 ```
 
@@ -129,8 +129,8 @@ In development mode, you can create a `.env` file in the `api` directory to spec
 **Example `.env` file:**
 
 ```env
-UPLOAD_FOLDER=/absolute/path/to/local/videos
-CORS_ORIGINS=http://localhost:3000
+export UPLOAD_FOLDER="/data/videos"
+export CORS_ORIGINS="http://localhost:3000,http://172.19.245.152:30001"
 ```
 
 > **Note**: In Kubernetes, the `UPLOAD_FOLDER` is automatically set via volume mounts, so you don't need to set it manually.

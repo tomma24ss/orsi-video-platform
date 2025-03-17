@@ -1,0 +1,14 @@
+opencv-python-headless>=4.5,<5.0
+requests
+tqdm
+numpy
+pillow
+matplotlib
+PyYAML 
+scipy 
+psutil
+onnx
+onnxruntime
+thop
+torchvision
+ultralytics

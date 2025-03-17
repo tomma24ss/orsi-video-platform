@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ai-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: ai-job
+        image: orsi-ai-job:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: VIDEO_FILENAME
+          value: "example.mp4"  # This will be dynamically set from the API
+        volumeMounts:
+        - name: video-storage
+          mountPath: /data/videos
+      restartPolicy: Never
+      volumes:
+      - name: video-storage
+        persistentVolumeClaim:
+          claimName: video-pvc

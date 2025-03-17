@@ -12,3 +12,9 @@ services:
       context: ./api
       dockerfile: Dockerfile
     image: orsi-api:latest
+
+  ai-job:
+    build:
+      context: ./ai-job
+      dockerfile: Dockerfile
+    image: orsi-ai-job:latest

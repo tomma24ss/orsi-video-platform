@@ -1,0 +1,45 @@
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore virtual environments
+venv/
+env/
+
+# Ignore system files
+.DS_Store
+
+# Ignore Docker files not needed in the build
+docker-compose.yml
+Dockerfile
+
+# Ignore git files and metadata
+.git
+.gitignore
+
+# Ignore unnecessary documentation
+README.md
+*.md
+
+# Ignore test directories or files
+tests/
+*.test.py
+
+# Ignore IDE configurations
+.vscode/
+.idea/
+
+# Ignore logs
+*.log
+
+# Ignore any other temporary files
+*.tmp
+*.bak
+
+# Ignore AI models (if not needed in the image)
+*.pt
+
+# Ignore large datasets if they are mounted later
+data/

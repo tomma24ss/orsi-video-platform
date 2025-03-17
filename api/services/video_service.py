@@ -1,5 +1,6 @@
 from flask import current_app as app
 import os
+import re
 from flask import send_from_directory
 from utils.logger import logger
 from exceptions.api_exceptions import APIException
@@ -48,12 +49,21 @@ class VideoService:
 
     @staticmethod
     def get_unique_filename(filename):
+        # Split the filename and extension
         base, extension = os.path.splitext(filename)
-        counter = 1
-        unique_filename = filename
 
+        # Sanitize the base name for Kubernetes compatibility
+        sanitized_base = re.sub(r'[^a-z0-9.-]', '-', base.lower())
+        sanitized_base = re.sub(r'^[^a-z0-9]+', '', sanitized_base)
+        sanitized_base = re.sub(r'[^a-z0-9]+$', '', sanitized_base)
+
+        # Start with the sanitized filename
+        unique_filename = f"{sanitized_base}{extension}"
+        counter = 1
+
+        # Ensure uniqueness by adding a counter if needed
         while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)):
-            unique_filename = f"{base}_{counter}{extension}"
+            unique_filename = f"{sanitized_base}-{counter}{extension}"
             counter += 1
 
         return unique_filename

@@ -147,7 +147,7 @@ In development mode, create a `.env` file in the `api` directory:
 export UPLOAD_FOLDER="/data/videos/uploaded"
 export PROCESSED_FOLDER="/data/videos/processed"
 export METADATA_FOLDER="/data/videos/metadata"
-export CORS_ORIGINS="http://localhost:3000,http://172.19.245.152:30001"
+export CORS_ORIGINS="http://172.19.245.152:30001"
 ```
 
 > **Note**: In Kubernetes, these folders are set via volume mounts.
@@ -218,15 +218,6 @@ sudo docker system prune -f
 - **CORS**: Ensure CORS settings in the API are configured correctly for external access.
 - **WSL2 IP**: If using WSL2, the IP may change after restarting, so update accordingly.
 - **AI Job Delay**: The AI job may take up to 1 minute for larger videos.
-
----
-
-## 👨‍💻 Contributing
-
-1. Fork this repository.  
-2. Create a new branch for your feature.  
-3. Commit your changes with clear messages.  
-4. Submit a pull request for review.
 
 ---
 

@@ -15,11 +15,19 @@ INPUT_FOLDER = "/data/videos/uploaded"
 PROCESSED_FOLDER = "/data/videos/processed"
 METADATA_FOLDER = "/data/videos/metadata"
 TEMP_FOLDER = "/data/videos/temp"
+STATUS_FOLDER = "/data/videos/status"
 
 # Ensure directories exist
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 os.makedirs(METADATA_FOLDER, exist_ok=True)
 os.makedirs(TEMP_FOLDER, exist_ok=True)
+os.makedirs(STATUS_FOLDER, exist_ok=True)
+
+def update_status(status, progress):
+    """Write status to a file."""
+    status_path = os.path.join(STATUS_FOLDER, f"{VIDEO_FILENAME}.json")
+    with open(status_path, "w") as f:
+        json.dump({"status": status, "progress": progress}, f)
 
 def validate_video(file_path):
     """Validate video file using ffprobe."""
@@ -58,6 +66,7 @@ def process_video(filename):
 
     if not os.path.exists(input_video_path):
         logger.error(f"Video not found: {input_video_path}")
+        update_status("failed", 0)
         return
 
     # Load YOLO model
@@ -68,25 +77,26 @@ def process_video(filename):
     cap = cv2.VideoCapture(input_video_path)
     if not cap.isOpened():
         logger.error(f"Failed to open video: {input_video_path}")
+        update_status("failed", 0)
         return
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    if fps == 0:
-        fps = 30
-        logger.warning("FPS not detected. Defaulting to 30 FPS.")
+    logger.info(f"Video properties - Width: {width}, Height: {height}, FPS: {fps}, Total Frames: {total_frames}")
 
-    logger.info(f"Video properties - Width: {width}, Height: {height}, FPS: {fps}")
+    # Start processing
+    update_status("processing", 1)
 
-    # Initial video writing with OpenCV
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(temp_video_path, fourcc, fps, (width, height))
 
     if not out.isOpened():
         logger.error(f"Failed to open VideoWriter for path: {temp_video_path}")
         cap.release()
+        update_status("failed", 0)
         return
 
     metadata = []
@@ -118,6 +128,10 @@ def process_video(filename):
         out.write(frame)
         frame_count += 1
 
+        # Update progress accurately
+        progress = max(1, int((frame_count / total_frames) * 100))
+        update_status("processing", progress)
+
     cap.release()
     out.release()
 
@@ -127,8 +141,10 @@ def process_video(filename):
     # Validate the final video
     if os.path.exists(processed_video_path) and validate_video(processed_video_path):
         logger.info(f"Processed video saved successfully: {processed_video_path}")
+        update_status("completed", 100)
     else:
         logger.error(f"Processed video is invalid or not found: {processed_video_path}")
+        update_status("failed", 0)
 
     os.remove(temp_video_path)  # Clean up temporary file
 

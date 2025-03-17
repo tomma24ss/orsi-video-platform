@@ -1,0 +1,64 @@
+# Python bytecode files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment variable files
+.env
+*.env
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode and PyCharm settings
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# Coverage reports
+htmlcov/
+.coverage
+coverage.xml
+
+# Pytest cache
+.pytest_cache/
+
+# MyPy cache
+.mypy_cache/
+
+# Temporary files
+*.bak
+*.tmp
+*.swp
+
+# Docker files (if using)
+*.dockerignore
+
+# Node.js (if you have any JS in your project)
+node_modules/
+
+# Ultralytics cache (YOLO specific)
+ultralytics/
+
+# Ignore compiled files
+*.so
+*.o
+
+# Ignore the metadata and video processing outputs (if they are large and regenerated)
+data/videos/metadata/
+data/videos/*.mp4

@@ -6,8 +6,13 @@ import VideoList from './components/VideoList';
 
 const API_URL = process.env.REACT_APP_API_URL as string;
 
+interface VideoData {
+  uploaded: string[];
+  processed: string[];
+}
+
 const App: React.FC = () => {
-  const [videos, setVideos] = useState<string[]>([]);
+  const [videos, setVideos] = useState<VideoData>({ uploaded: [], processed: [] });
   const [alert, setAlert] = useState<string>('');
 
   useEffect(() => {
@@ -16,7 +21,7 @@ const App: React.FC = () => {
 
   const fetchVideos = async () => {
     try {
-      const response = await axios.get<string[]>(`${API_URL}/videos`);
+      const response = await axios.get<VideoData>(`${API_URL}/videos`);
       setVideos(response.data);
     } catch (error) {
       setAlert('Failed to fetch videos.');

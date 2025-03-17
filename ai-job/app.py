@@ -1,4 +1,5 @@
 import os
+import subprocess
 from ultralytics import YOLO
 import cv2
 import json
@@ -10,38 +11,86 @@ logger = logging.getLogger(__name__)
 
 # Environment Variables
 VIDEO_FILENAME = os.getenv("VIDEO_FILENAME")
-INPUT_FOLDER = "/data/videos"
+INPUT_FOLDER = "/data/videos/uploaded"
+PROCESSED_FOLDER = "/data/videos/processed"
 METADATA_FOLDER = "/data/videos/metadata"
+TEMP_FOLDER = "/data/videos/temp"
 
+# Ensure directories exist
+os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 os.makedirs(METADATA_FOLDER, exist_ok=True)
+os.makedirs(TEMP_FOLDER, exist_ok=True)
+
+def validate_video(file_path):
+    """Validate video file using ffprobe."""
+    try:
+        result = subprocess.run(['ffprobe', '-v', 'error', '-show_entries',
+                                 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1',
+                                 file_path], capture_output=True, text=True)
+        return result.returncode == 0
+    except Exception as e:
+        logger.error(f"Video validation failed: {e}")
+        return False
+
+def reencode_video_to_h264(input_path, output_path):
+    """Re-encode video using FFmpeg with H264 codec."""
+    try:
+        subprocess.run([
+            'ffmpeg',
+            '-y',
+            '-i', input_path,
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '22',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            output_path
+        ], check=True)
+        logger.info(f"Video successfully re-encoded to H264: {output_path}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to re-encode video to H264: {e}")
 
 def process_video(filename):
-    video_path = os.path.join(INPUT_FOLDER, filename)
+    input_video_path = os.path.join(INPUT_FOLDER, filename)
+    temp_video_path = os.path.join(TEMP_FOLDER, f"temp_{filename}")
+    processed_video_path = os.path.join(PROCESSED_FOLDER, filename)
     metadata_path = os.path.join(METADATA_FOLDER, f"{filename}.json")
 
-    if not os.path.exists(video_path):
-        logger.error(f"Video not found: {video_path}")
+    if not os.path.exists(input_video_path):
+        logger.error(f"Video not found: {input_video_path}")
         return
 
     # Load YOLO model
     model = YOLO("yolov8n.pt")
-    logger.info(f"Loaded YOLO model.")
+    logger.info("Loaded YOLO model.")
 
     # Open the video
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture(input_video_path)
     if not cap.isOpened():
-        logger.error(f"Failed to open video: {video_path}")
+        logger.error(f"Failed to open video: {input_video_path}")
         return
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-    # Setup video writer (overwrite original)
+    if fps == 0:
+        fps = 30
+        logger.warning("FPS not detected. Defaulting to 30 FPS.")
+
+    logger.info(f"Video properties - Width: {width}, Height: {height}, FPS: {fps}")
+
+    # Initial video writing with OpenCV
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
+    out = cv2.VideoWriter(temp_video_path, fourcc, fps, (width, height))
+
+    if not out.isOpened():
+        logger.error(f"Failed to open VideoWriter for path: {temp_video_path}")
+        cap.release()
+        return
 
     metadata = []
+    frame_count = 0
 
     while True:
         ret, frame = cap.read()
@@ -57,7 +106,6 @@ def process_video(filename):
             class_id = int(cls)
             label = results[0].names[class_id] if class_id in results[0].names else "unknown"
 
-            # Draw bounding box and label
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
@@ -68,16 +116,28 @@ def process_video(filename):
 
         metadata.append(frame_metadata)
         out.write(frame)
+        frame_count += 1
 
     cap.release()
     out.release()
+
+    # Re-encode the processed video to H264
+    reencode_video_to_h264(temp_video_path, processed_video_path)
+
+    # Validate the final video
+    if os.path.exists(processed_video_path) and validate_video(processed_video_path):
+        logger.info(f"Processed video saved successfully: {processed_video_path}")
+    else:
+        logger.error(f"Processed video is invalid or not found: {processed_video_path}")
+
+    os.remove(temp_video_path)  # Clean up temporary file
 
     # Save metadata
     with open(metadata_path, "w") as f:
         json.dump(metadata, f)
 
-    logger.info(f"Processed and saved video: {video_path}")
     logger.info(f"Metadata saved: {metadata_path}")
+    logger.info(f"Total frames processed: {frame_count}")
 
 if __name__ == "__main__":
     if VIDEO_FILENAME:

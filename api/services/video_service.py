@@ -8,44 +8,38 @@ from exceptions.api_exceptions import APIException
 class VideoService:
 
     @staticmethod
-    def list_videos():
+    def list_videos(folder: str) -> list:
+        """List all videos in the specified folder."""
         try:
-            videos = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if f.endswith('.mp4')]
-            logger.info(f"Listing videos: {videos}")
-            return videos
+            return [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
         except Exception as e:
-            logger.error(f"Error listing videos: {e}")
-            raise APIException("Failed to list videos", 500)
+            raise Exception(f"Failed to list videos in {folder}: {e}")
 
     @staticmethod
-    def save_video(file):
-        try:
-            unique_filename = VideoService.get_unique_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-            file.save(file_path)
-            logger.info(f"File uploaded successfully: {unique_filename}")
-            return unique_filename
-        except Exception as e:
-            logger.error(f"Failed to save file: {e}")
-            raise APIException("Failed to upload file", 500)
+    def save_video(file, folder: str) -> str:
+        """Save video to the specified folder."""
+        filename = file.filename
+        save_path = os.path.join(folder, filename)
+        file.save(save_path)
+        return filename
 
     @staticmethod
     def get_video(filename):
         try:
             logger.info(f"Serving video: {filename}")
-            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+            return send_from_directory(app.config['UPLOAD_FOLDER'], filename,  mimetype='video/mp4')
         except FileNotFoundError:
             logger.error(f"Video not found: {filename}")
             raise APIException("File not found", 404)
 
     @staticmethod
-    def delete_video(filename):
-        try:
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            logger.info(f"File deleted: {filename}")
-        except FileNotFoundError:
-            logger.error(f"File not found for deletion: {filename}")
-            raise APIException("File not found", 404)
+    def delete_video(filename: str, folder: str) -> None:
+        """Delete the specified video from the folder."""
+        file_path = os.path.join(folder, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        else:
+            raise Exception(f"File {filename} not found in {folder}.")
 
     @staticmethod
     def get_unique_filename(filename):

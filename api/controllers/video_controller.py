@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_from_directory
 from services.video_service import VideoService
 from exceptions.api_exceptions import APIException
 from kubernetes import client, config
@@ -10,6 +10,15 @@ import uuid
 video_blueprint = Blueprint('video', __name__, url_prefix='/videos')
 logger = logging.getLogger(__name__)
 
+# Directories
+UPLOAD_FOLDER = "/data/videos/uploaded"
+PROCESSED_FOLDER = "/data/videos/processed"
+METADATA_FOLDER = "/data/videos/metadata"
+
+# Ensure directories exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(PROCESSED_FOLDER, exist_ok=True)
+os.makedirs(METADATA_FOLDER, exist_ok=True)
 
 # Initialize Kubernetes configuration inside the container
 try:
@@ -19,13 +28,13 @@ except config.ConfigException:
 
 k8s_batch = client.BatchV1Api()
 
-
+# Trigger AI Job
 def trigger_ai_job(unique_filename):
-    job_id = str(uuid.uuid4())[:8]  # Generate a short unique ID
+    job_id = str(uuid.uuid4())[:8]
     job_name = f"ai-job-{unique_filename.replace('.', '-')}-{job_id}"
-    
-    # First, delete any existing job with the same name (Failed or Running)
+
     try:
+        # Delete existing job if it exists
         k8s_batch.delete_namespaced_job(
             name=job_name,
             namespace="default",
@@ -36,29 +45,16 @@ def trigger_ai_job(unique_filename):
         if e.status != 404:
             logger.error(f"Failed to delete existing job '{job_name}': {e}")
             raise
-        
+
     # Define the job manifest
     job = client.V1Job(
         metadata=client.V1ObjectMeta(name=job_name),
         spec=client.V1JobSpec(
-            ttl_seconds_after_finished=120,  # Auto-delete after 60 seconds
+            ttl_seconds_after_finished=120,
             backoff_limit=0,
             template=client.V1PodTemplateSpec(
-                metadata=client.V1ObjectMeta(
-                    labels={"app": "ai-job"},
-                    owner_references=[
-                        client.V1OwnerReference(
-                            api_version="batch/v1",
-                            kind="Job",
-                            name=job_name,
-                            uid="",
-                            controller=True,
-                            block_owner_deletion=True
-                        )
-                    ]
-                ),
+                metadata=client.V1ObjectMeta(labels={"app": "ai-job"}),
                 spec=client.V1PodSpec(
-                    
                     restart_policy="Never",
                     containers=[
                         client.V1Container(
@@ -69,7 +65,8 @@ def trigger_ai_job(unique_filename):
                             volume_mounts=[
                                 client.V1VolumeMount(
                                     name="video-storage",
-                                    mount_path="/data/videos"
+                                    mount_path="/data/videos",
+                                    read_only=False
                                 )
                             ]
                         )
@@ -78,7 +75,8 @@ def trigger_ai_job(unique_filename):
                         client.V1Volume(
                             name="video-storage",
                             persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
-                                claim_name="video-pvc"
+                                claim_name="video-pvc",
+                                read_only=False
                             )
                         )
                     ]
@@ -86,7 +84,7 @@ def trigger_ai_job(unique_filename):
             )
         )
     )
-    
+
     try:
         k8s_batch.create_namespaced_job(namespace="default", body=job)
         logger.info(f"AI Job triggered successfully for {unique_filename}")
@@ -94,17 +92,7 @@ def trigger_ai_job(unique_filename):
         logger.error(f"Failed to trigger AI job: {e}")
         raise APIException(str(e), 500)
 
-# List Videos
-@video_blueprint.route('/', methods=['GET'])
-def list_videos():
-    try:
-        videos = VideoService.list_videos()
-        return jsonify(videos)
-    except Exception as e:
-        logger.error(f"Error listing videos: {e}")
-        raise APIException(str(e))
-
-# Upload Video Route
+# Upload Raw Video
 @video_blueprint.route('/upload', methods=['POST'])
 def upload_video():
     if 'video' not in request.files:
@@ -115,30 +103,53 @@ def upload_video():
         raise APIException("No selected file.", 400)
 
     try:
-        unique_filename = VideoService.save_video(file)
-
-        # Trigger AI Job after upload
+        unique_filename = VideoService.save_video(file, UPLOAD_FOLDER)
         trigger_ai_job(unique_filename)
-
         return jsonify({"message": f"File uploaded and AI job triggered for {unique_filename}"}), 200
     except Exception as e:
         raise APIException(str(e))
-    
-# Serve Video
-@video_blueprint.route('/<filename>', methods=['GET'])
-def get_video(filename):
+
+# List Uploaded and Processed Videos
+@video_blueprint.route('/', methods=['GET'])
+def list_videos():
     try:
-        return VideoService.get_video(filename)
+        uploaded = VideoService.list_videos(UPLOAD_FOLDER)
+        processed = VideoService.list_videos(PROCESSED_FOLDER)
+        return jsonify({"uploaded": uploaded, "processed": processed})
     except Exception as e:
-        logger.error(f"Error serving video: {e}")
+        logger.error(f"Error listing videos: {e}")
         raise APIException(str(e))
 
-# Delete Video
-@video_blueprint.route('/<filename>', methods=['DELETE'])
-def delete_video(filename):
+# Serve Uploaded, Processed Video or Metadata
+@video_blueprint.route('/<folder>/<filename>', methods=['GET'])
+def get_video(folder, filename):
     try:
-        VideoService.delete_video(filename)
+        if folder == "uploaded":
+            return send_from_directory(UPLOAD_FOLDER, filename, mimetype='video/mp4')
+        elif folder == "processed":
+            return send_from_directory(PROCESSED_FOLDER, filename, mimetype='video/mp4')
+        elif folder == "metadata":
+            return send_from_directory(METADATA_FOLDER, filename, mimetype='application/json')
+        else:
+            raise APIException("Invalid folder name.", 400)
+    except Exception as e:
+        logger.error(f"Error serving file: {e}")
+        raise APIException(str(e))
+
+# Delete Video or Metadata
+@video_blueprint.route('/<folder>/<filename>', methods=['DELETE'])
+def delete_video(folder, filename):
+    try:
+        if folder == "uploaded":
+            VideoService.delete_video(filename, UPLOAD_FOLDER)
+        elif folder == "processed":
+            VideoService.delete_video(filename, PROCESSED_FOLDER)
+        elif folder == "metadata":
+            VideoService.delete_video(filename, METADATA_FOLDER)
+        else:
+            raise APIException("Invalid folder name.", 400)
+
         return jsonify({"message": "File deleted"}), 200
     except Exception as e:
-        logger.error(f"Error deleting video: {e}")
+        logger.error(f"Error deleting file: {e}")
         raise APIException(str(e))

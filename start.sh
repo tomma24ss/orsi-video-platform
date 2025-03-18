@@ -6,7 +6,7 @@ echo "⚙️ Checking and Installing Required Tools..."
 
 # Function to install a package if not already installed
 install_if_missing() {
-    if ! command -v "$1" &> /dev/null; then
+    if ! dpkg -l | grep -qw "$2"; then
         echo "🔄 Installing $1..."
         sudo apt-get update
         sudo apt-get install -y "$2"
@@ -14,10 +14,100 @@ install_if_missing() {
         echo "✅ $1 is already installed."
     fi
 }
+install_kubectl() {
+    if ! command -v kubectl &> /dev/null; then
+        echo "🔄 Installing kubectl..."
+
+        # Add Kubernetes apt repository key
+        sudo apt-get update
+        sudo apt-get install -y apt-transport-https ca-certificates curl
+
+        curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo tee /usr/share/keyrings/kubernetes-archive-keyring.gpg > /dev/null
+
+        echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://packages.cloud.google.com/apt kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+        # Install kubectl
+        sudo apt-get update
+        sudo apt-get install -y kubectl
+    else
+        echo "✅ kubectl is already installed."
+    fi
+}
+# Function to install Docker manually (without Docker Desktop)
+install_docker() {
+    echo "🔍 Checking Docker installation..."
+    
+    # Check if Docker is installed and running
+    if command -v docker &> /dev/null && systemctl is-active --quiet docker; then
+        echo "✅ Docker is already installed and running."
+        return
+    fi
+
+    echo "🔄 Installing Docker..."
+
+    # Remove any old versions
+    sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
+    sudo apt-get update
+
+    # Install prerequisites
+    sudo apt-get install -y \
+        ca-certificates \
+        curl \
+        gnupg \
+        lsb-release
+
+    # Add Docker’s official GPG key
+    sudo mkdir -p /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
+
+    # Add Docker repository
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Install Docker
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+
+    # Enable and start Docker service
+    echo "🚀 Enabling and starting Docker service..."
+    sudo systemctl enable --now docker || {
+        echo "⚠️ systemd is not running. Manually starting Docker..."
+        sudo dockerd &
+        sleep 5
+    }
+
+    # Verify Docker installation
+    if ! systemctl is-active --quiet docker; then
+        echo "❌ Docker failed to start. Please check logs."
+        exit 1
+    fi
+
+    echo "✅ Docker installation complete."
+}
+
+# Ensure systemd is running in WSL
+ensure_systemd() {
+    if [ -d "/run/systemd/system" ]; then
+        echo "✅ systemd is available."
+    else
+        echo "❌ systemd is not running in WSL. You must enable it manually."
+        exit 1
+    fi
+}
+
+# Detect if running inside WSL
+if grep -qi microsoft /proc/version; then
+    echo "💡 Running inside WSL. Installing Docker natively (without Docker Desktop)..."
+    ensure_systemd
+    install_docker
+else
+    echo "💡 Running on native Linux. Installing Docker normally..."
+    install_docker
+fi
 
 # Install required tools
 install_if_missing "pv" "pv"
-install_if_missing "docker" "docker.io"
 
 # Install k3s if not exists
 if ! command -v k3s &> /dev/null; then
@@ -27,24 +117,23 @@ else
     echo "✅ k3s is already installed."
 fi
 
-# Install kubectl if not exists
-if ! command -v kubectl &> /dev/null; then
-    echo "🔄 Installing kubectl..."
-    sudo apt-get update
-    sudo apt-get install -y kubectl
-else
-    echo "✅ kubectl is already installed."
-fi
+install_kubectl
 
+# Start services properly
 echo "🚀 Starting Docker and k3s..."
-sudo systemctl start docker
-sudo systemctl start k3s
+if systemctl list-units --full -all | grep -q "docker.service"; then
+    sudo systemctl start docker
+else
+    echo "❌ Docker service not found! Installation failed."
+    exit 1
+fi
+sudo systemctl start k3s || echo "⚠️ Failed to start k3s. Make sure k3s is installed correctly."
 
-# Ensure Kubernetes config is accessible and set the environment variable
+# Ensure Kubernetes config is accessible
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 
-# Wait for the k3s API server to be accessible
+# Wait for k3s API server to be accessible
 echo "⏳ Waiting for k3s API server to be accessible..."
 until kubectl cluster-info --kubeconfig=$KUBECONFIG &> /dev/null; do
     echo "Waiting for Kubernetes API server to be accessible..."
@@ -92,14 +181,6 @@ for resource in deployment.yaml service.yaml; do
 done
 sudo kubectl delete -f ./k3s/ai-job/job.yaml --ignore-not-found --kubeconfig=$KUBECONFIG
 
-# # Wait for PVC/PV to terminate
-# echo "⏳ Waiting for PVC/PV to be deleted..."
-# while kubectl get pvc video-pvc --kubeconfig=$KUBECONFIG &> /dev/null || kubectl get pv video-pv --kubeconfig=$KUBECONFIG &> /dev/null; do
-#     echo "PVC/PV still terminating...waiting."
-#     sleep 2
-# done
-# echo "✅ Old PVC/PV resources cleaned."
-
 # Apply Kubernetes Persistent Volume and Claim
 echo "⚙️  Applying Kubernetes Persistent Volume and Claim..."
 sudo kubectl apply -f ./k3s/api/pv.yaml --kubeconfig=$KUBECONFIG
@@ -142,4 +223,16 @@ kubectl get pvc --kubeconfig=$KUBECONFIG
 kubectl get pods --kubeconfig=$KUBECONFIG
 kubectl get services --kubeconfig=$KUBECONFIG
 
-echo "✅ Startup Complete! Access the app via WSL2 IP or localhost (if port-proxy is configured)."
+echo "✅ Startup Complete! Access the app via WSL2 IP or localhost."
+# Get the WSL2 IP address
+WSL_IP=$(hostname -I | awk '{print $1}')
+
+# If the IP is empty, set a fallback message
+if [[ -z "$WSL_IP" ]]; then
+    WSL_IP="(IP could not be detected, use 'hostname -I' to check manually)"
+fi
+
+# Print the URLs where the services are running
+echo -e "\n🚀 Application is running at:"
+echo "Frontend: http://$WSL_IP:30001/"
+echo "API: http://$WSL_IP:30002/videos"

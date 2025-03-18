@@ -1,0 +1,19 @@
+# Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Logs & temp files
+logs/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.production

@@ -32,7 +32,8 @@ orsi-video-platform/
 │   ├── frontend/       # Frontend Kubernetes manifests
 │   └── ai-job/        # AI job Kubernetes manifest
 ├── start.sh            # Script to start Docker and Kubernetes deployments
-├── stop.sh             # Script to clean and stop Docker and Kubernetes deployments
+├── stop.sh             # Script to stop Docker and Kubernetes deployments
+├── cleanup.sh          # Script to clean Docker and Kubernetes deployments and remove installations
 └── README.md           # Project documentation
 ```
 
@@ -47,7 +48,13 @@ git clone https://github.com/tomma24ss/orsi-video-platform.git
 cd orsi-video-platform
 ```
 
-### 2. **Ensure Dependencies are Installed**
+---
+
+### 2. **Ensure Dependencies are Installed (Optional)**
+
+> **Note:** This platform is designed for **Linux environments**, as the `start.sh` script relies on Linux-specific commands.
+
+The `start.sh` script will automatically install **Docker**, **k3s**, **kubectl**, and **Python (3.12+)** if they are not already installed. However, if you prefer to install them manually, you can do so with:
 
 - **Docker**  
 - **k3s** (Lightweight Kubernetes)  
@@ -55,6 +62,7 @@ cd orsi-video-platform
 - **Python (3.12+)** for the Flask API  
 
 ---
+
 
 ## 🚀 Deployment Instructions
 
@@ -64,13 +72,27 @@ cd orsi-video-platform
 ./start.sh
 ```
 
-This script will:
+#### 🔍 What Does `start.sh` Do?
+The `start.sh` script automates the setup and deployment of the video platform by performing the following actions:
 
-- Start Docker and k3s.  
-- Build Docker images for the API, frontend, and AI job.  
-- Import the Docker images into k3s.  
-- Apply Kubernetes manifests for PV, PVC, deployments, and services.  
-- Display the status of all Kubernetes resources.
+1. **Starts the required services**  
+   - Ensures Docker is running  
+   - Starts k3s (Lightweight Kubernetes)
+
+2. **Builds and Prepares Containers**  
+   - Builds Docker images for the API, frontend, and AI job  
+   - Loads these images into k3s
+
+3. **Deploys the Application on Kubernetes**  
+   - Applies Kubernetes manifests for Persistent Volumes (PV) and Persistent Volume Claims (PVC)  
+   - Deploys the API, frontend, and AI processing job  
+   - Exposes services via Kubernetes NodePort
+
+4. **Verifies Deployment**  
+   - Waits for Kubernetes pods to be ready  
+   - Displays the status of all Kubernetes resources  
+
+This ensures that the platform is fully operational with minimal manual intervention.
 
 ---
 
@@ -173,10 +195,12 @@ export CORS_ORIGINS="http://172.19.245.152:30001"
 ### Deployment Files
 
 - **API Kubernetes Files**:  
-  `./k8s/api/pv.yaml`, `./k8s/api/pvc.yaml`, `./k8s/api/deployment.yaml`, `./k8s/api/service.yaml`
+  `./k3s/api/pv.yaml`, `./k3s/api/pvc.yaml`, `./k3s/api/deployment.yaml`, `./k3s/api/service.yaml`
 
 - **Frontend Kubernetes Files**:  
-  `./k8s/frontend/deployment.yaml`, `./k8s/frontend/service.yaml`
+  `./k3s/frontend/deployment.yaml`, `./k3s/frontend/service.yaml`
+- **ai-job Kubernetes Files**:  
+  `./k3s/ai-job/job.yaml`
 
 ---
 

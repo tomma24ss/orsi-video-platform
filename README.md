@@ -258,10 +258,9 @@ sudo docker system prune -f
 
 ## ✅ **How to Use This**
 
-1. Replace `<your-username>` in the GitHub clone URL.  
-2. Adjust the `<WSL2-IP>` with your actual WSL2 IP address.  
-3. Ensure all folder structures match as described.  
-4. Test the setup by running:
+1. Clone the GitHub clone URL.   
+2. Ensure all folder structures match as described.  
+3. Test the setup by running:
 
 ```bash
 chmod +x start.sh
